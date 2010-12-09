@@ -47,14 +47,18 @@
     return dur;
   };
 
-  VideoSequencer.prototype.swap = function() {
-    var that = this;
+  VideoSequencer.prototype.swap = function(seeking) {
     this.divTag.removeChild(this.playingVideo);
-    this.playingVideo = this.nextVideo;
-    this.playingVideo.setAttribute("style", "display: inline");
-    this.playingVideo.setAttribute("id", "active");
+    if (!seeking) {
+      this.playingVideo = this.nextVideo;
+      this.playingVideo.setAttribute("style", "display: inline");
+      this.playingVideo.setAttribute("id", "active");
+    } else {
+      this.playingVideo = this.createVideoTag(this.width, this.height, true, false);
+	  this.divTag.removeChild(this.nextVideo);
+    }
     this.addListenersToCurrentVideo("timeupdate");
-    this.playingVideo.play();		
+    //this.playingVideo.play();		
     this.nextVideo = this.createVideoTag(this.width,this.height,true, true);
   }
   VideoSequencer.prototype.getSegmentData = function(segDataFile) {
@@ -98,9 +102,10 @@
 
   VideoSequencer.prototype.update = function() {
     var vid = this.playingVideo;
-    if (vid.currentTime >= vid.duration - 0.05 && vid.readyState >= 3){
+    if (vid.currentTime >= vid.duration - 0.05){
       this.currentIndex+=1;
-      this.swap();
+      this.swap(false);
+	  this.play();
     }
   };
 
@@ -120,14 +125,14 @@
       newVid.setAttribute("src", this.segments[this.currentIndex + 1] ? this.segments[this.currentIndex + 1].src : this.segments[0].src);
       newVid.setAttribute("id", "inactive");
       newVid.setAttribute("style", "display: none");
-      newVid.autobuffer = true;
+      newVid.setAttribute("preload", "auto");
     }	
     this.divTag.appendChild(newVid);
     return newVid;
   };
 
   VideoSequencer.prototype.play = function() {
-    this.playingVideo.Play();
+    this.playingVideo.play();
   };
 
   VideoSequencer.prototype.togglePlay = function() {
@@ -139,7 +144,7 @@
   };
 
   VideoSequencer.prototype.pause = function() {
-    this.playingVideo.Pause();
+    this.playingVideo.pause();
   };
 
   VideoSequencer.prototype.add = function(src, len, index) {
@@ -147,7 +152,7 @@
     newSource.src = src || "";
     newSource.length = len || 0;
     var l = this.segments.length;
-    this.segments.splice((len >= 0 && len < l ? len : l),0,{ src: src || "" , length : len || 0 })
+    this.segments.splice((len >= 0 && len < l ? len : l),0,{ src: src || "" , length : len || 0 });
   };
   VideoSequencer.prototype.addEventListener = function(event, callback, useCapture) {
     var callbackExists = false;
@@ -185,4 +190,33 @@
     }
   };
 
+  VideoSequencer.prototype.seek = function(time) {
+    self = this;
+    var duration = this.duration;
+    if (!(time >= 0 && time <= duration)) { return; }
+    segments = this.segments;
+    for (var i = 0, l = segments.length; i < l; i++) {
+        segLen = segments[i].length;
+        if (time > segLen) {
+          time = time - segLen;
+          continue;
+        }
+		if (!(this.currentIndex == i)) {
+          this.currentIndex = i;
+          this.swap(true);
+        } 
+		if (!this.playingVideo.paused) this.pause();
+		
+		 var seekIntoVid = function (t) {
+		  if (self.playingVideo.readyState >= 2) {
+            self.playingVideo.currentTime = t;
+            self.play();
+            clearInterval(seekWhenReady);
+          }
+        };
+		
+        var seekWhenReady = setInterval( function(){ seekIntoVid(time)} ,50);
+		break;
+    }
+  };	
 } ());
